@@ -306,7 +306,7 @@ feature importance in simplified charts. Results correspond to the
 currently selected date interval.
 
 10.4 Data Quality
-Displays the source preview, row and column information, data types,
+Displays all uploaded source rows in a scrollable table, row and column information, data types,
 missing values before and after cleaning, duplicate and invalid-time
 counts, cleaned row count, and a cleaned-data preview.
 

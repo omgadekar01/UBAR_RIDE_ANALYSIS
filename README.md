@@ -125,7 +125,7 @@ palette so the main patterns are easy to compare.
    feature importance, and MAE/RMSE/R-squared comparison with a training-mean
    baseline. R-squared is shown as unavailable when it cannot be computed
    meaningfully. The dashboard does not promise model accuracy.
-4. **Data Quality** — original preview, column types, missing values before
+4. **Data Quality** — all uploaded rows in a scrollable table, column types, missing values before
    and after cleaning, cleaning counts, and a cleaned-data preview.
 
 ## Manual test cases and expected behavior
@@ -133,7 +133,7 @@ palette so the main patterns are easy to compare.
 | Test | How to check | Expected behavior |
 |---|---|---|
 | Start with the supplied dataset | Run the app without uploading a file | The supplied `uber_trips_dataset_50k.csv` loads automatically; four tabs appear. |
-| Check the input summary | Open **Data Quality** | The source preview, row/column counts, types, missing-value counts, duplicate count, invalid-time count, and cleaned-row count are shown. |
+| Check the input summary | Open **Data Quality** | All uploaded rows are available in a scrollable table, along with row/column counts, types, missing-value counts, duplicate count, invalid-time count, and cleaned-row count. |
 | Download cleaned records | Click **Download cleaned CSV** in the sidebar | A CSV named `cleaned_uber_rides.csv` downloads with duplicates and invalid pickup times removed. |
 | Use the date filter | Select a smaller date interval in **Overview** | Overview charts and KPIs update; the predictive evaluation uses rides from that selected interval. |
 | Check pickup charts | Open **Overview** | Daily, daytime (6 AM–5:59 PM), and Monday-to-Sunday charts render; the hourly chart does not display nighttime pickups. |

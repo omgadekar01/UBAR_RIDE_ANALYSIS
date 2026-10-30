@@ -508,7 +508,11 @@ def show_data_quality(raw_data, cleaned_data, cleaning_summary, timestamp_column
         f"**Rows:** {len(raw_data):,} · **Columns:** {len(raw_data.columns):,} "
         f"· **Pickup-time column:** `{timestamp_column}`"
     )
-    st.dataframe(raw_data.head(), hide_index=True)
+    st.dataframe(
+        raw_data,
+        hide_index=True,
+        height=400,
+    )
 
     column_information = pd.DataFrame(
         {
