@@ -1,4 +1,9 @@
-"""Interactive Uber ride analytics dashboard for a college mini-project."""
+"""Interactive Uber ride analytics dashboard for a college mini-project.
+
+The app reads ride records from an uploaded CSV or the bundled sample file,
+cleans the pickup timestamps, and displays charts, correlations, model results,
+and data-quality information in a Streamlit dashboard.
+"""
 
 from pathlib import Path
 import re
@@ -34,13 +39,52 @@ TIMESTAMP_ALIASES = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Reusable helpers: chart styling, column detection, and data preparation
+# ---------------------------------------------------------------------------
+
+def simplify_figure(figure, height=360, show_axes=True):
+    """Apply the dashboard's shared visual style to a Plotly chart.
+
+    INPUT:
+        figure: A Plotly figure to format.
+        height: Chart height in pixels.
+        show_axes: Whether to apply the shared axis and grid styling.
+    OUTPUT:
+        The same Plotly figure, with the shared layout applied.
+    """
+    figure.update_layout(
+        template="plotly_white",
+        height=height,
+        margin={"l": 48, "r": 20, "t": 52, "b": 42},
+        title={"x": 0, "font": {"size": 17}},
+        font={"size": 13},
+    )
+    if show_axes:
+        figure.update_xaxes(showgrid=False, zeroline=False)
+        figure.update_yaxes(
+            showgrid=True,
+            gridcolor="#E8EDF3",
+            zeroline=False,
+        )
+    return figure
+
+
 def normalize_name(column_name):
-    """Make different spellings of a column name easier to compare."""
+    """Convert a column name to lowercase letters separated by underscores.
+
+    INPUT: A source column name.
+    OUTPUT: A normalized string, such as "Pickup Time" becoming "pickup_time".
+    """
     return re.sub(r"[^a-z0-9]+", "_", str(column_name).strip().lower()).strip("_")
 
 
 def find_timestamp_column(data):
-    """Find a pickup date/time column without requiring one exact spelling."""
+    """Find the column containing each ride's pickup date and time.
+
+    INPUT: A Pandas DataFrame loaded from the ride CSV.
+    OUTPUT: The matching original column name, or None if no match is found.
+    """
     normalized_columns = {
         normalize_name(column): column for column in data.columns
     }
@@ -64,7 +108,15 @@ def find_timestamp_column(data):
 
 
 def clean_data(raw_data, timestamp_column):
-    """Remove exact duplicates and rows without a valid pickup timestamp."""
+    """Remove duplicate rides and rows without a usable pickup timestamp.
+
+    INPUT:
+        raw_data: The original ride records as a Pandas DataFrame.
+        timestamp_column: The column that contains pickup date/time values.
+    OUTPUT:
+        A pair containing the cleaned DataFrame and a dictionary of row counts
+        used by the Data Quality tab.
+    """
     original_rows = len(raw_data)
 
     # Count duplicates before removing them so the quality report can show the change.
@@ -92,45 +144,13 @@ def clean_data(raw_data, timestamp_column):
     }
 
 
-def find_coordinate_columns(data):
-    """Return pickup latitude and longitude columns when both are available."""
-    normalized_columns = {
-        normalize_name(column): column for column in data.columns
-    }
-    latitude_names = (
-        "pickup_lat",
-        "pickup_latitude",
-        "lat",
-        "latitude",
-    )
-    longitude_names = (
-        "pickup_lng",
-        "pickup_lon",
-        "pickup_longitude",
-        "pickup_long",
-        "lng",
-        "lon",
-        "longitude",
-        "long",
-    )
-
-    latitude_column = next(
-        (normalized_columns[name] for name in latitude_names if name in normalized_columns),
-        None,
-    )
-    longitude_column = next(
-        (
-            normalized_columns[name]
-            for name in longitude_names
-            if name in normalized_columns
-        ),
-        None,
-    )
-    return latitude_column, longitude_column
-
-
 def get_analysis_columns(data):
-    """Select numeric measurements and leave identifier-like fields out."""
+    """Choose useful numeric measurement columns for correlation analysis.
+
+    INPUT: A cleaned ride DataFrame.
+    OUTPUT: Column names for varying numeric measurements; ID columns and
+        columns with only one distinct value are excluded.
+    """
     numeric_columns = data.select_dtypes(include=np.number).columns.tolist()
     analysis_columns = []
 
@@ -151,8 +171,16 @@ def get_analysis_columns(data):
     return analysis_columns
 
 
+# ---------------------------------------------------------------------------
+# Analysis helpers and dashboard sections
+# ---------------------------------------------------------------------------
+
 def show_correlation_analysis(data):
-    """Display a correlation heatmap when there are enough useful measurements."""
+    """Display the numeric correlation heatmap in Streamlit.
+
+    INPUT: A cleaned ride DataFrame.
+    OUTPUT: No Python value; displays a heatmap or an explanatory message.
+    """
     analysis_columns = get_analysis_columns(data)
 
     if len(analysis_columns) < 2:
@@ -170,11 +198,11 @@ def show_correlation_analysis(data):
         zmin=-1,
         zmax=1,
         aspect="auto",
-        title="Correlation between numeric measurements",
-        labels={"x": "Column", "y": "Column", "color": "Correlation"},
+        title="Numeric feature correlations",
+        labels={"x": "Measurement", "y": "Measurement", "color": "Correlation"},
     )
-    figure.update_layout(height=520)
-    st.plotly_chart(figure)
+    simplify_figure(figure, height=420)
+    st.plotly_chart(figure, use_container_width=True)
     st.caption(
         "Correlation describes how two measurements vary together. "
         "It does not prove that one causes the other."
@@ -182,7 +210,13 @@ def show_correlation_analysis(data):
 
 
 def make_hourly_demand(data, timestamp_column):
-    """Turn individual rides into a continuous series of hourly ride counts."""
+    """Aggregate ride records into chronological hourly pickup counts.
+
+    INPUT:
+        data: Ride records to aggregate.
+        timestamp_column: The column containing parsed pickup timestamps.
+    OUTPUT: A Pandas Series indexed by hour, with zeroes for hours without rides.
+    """
     hourly_counts = (
         data.set_index(timestamp_column)
         .sort_index()
@@ -194,7 +228,12 @@ def make_hourly_demand(data, timestamp_column):
 
 
 def create_time_features(hourly_counts):
-    """Create simple calendar and sequence features for the model."""
+    """Build calendar and sequence inputs for hourly demand prediction.
+
+    INPUT: Hourly pickup counts indexed by timestamps.
+    OUTPUT: A DataFrame with hour, weekday, month, weekend, and time-index
+        features, one row per hourly count.
+    """
     timestamps = hourly_counts.index
     features = pd.DataFrame(index=timestamps)
     features["hour"] = timestamps.hour
@@ -206,7 +245,13 @@ def create_time_features(hourly_counts):
 
 
 def show_predictive_model(data, timestamp_column):
-    """Train and evaluate a Random Forest using an earlier-to-later split."""
+    """Train and evaluate hourly demand predictions in the Streamlit page.
+
+    INPUT:
+        data: Ride records in the date range selected on the Overview tab.
+        timestamp_column: The column containing parsed pickup timestamps.
+    OUTPUT: No Python value; displays evaluation metrics and model charts.
+    """
     hourly_counts = make_hourly_demand(data, timestamp_column)
 
     # A short series cannot provide a useful chronological test set.
@@ -296,11 +341,12 @@ def show_predictive_model(data, timestamp_column):
         x="Hour",
         y="Ride count",
         color="Series",
-        markers=True,
-        title="Actual and predicted hourly rides (chronological test period)",
+        color_discrete_sequence=["#2563EB", "#F97316"],
+        title="Actual vs predicted rides",
         labels={"Hour": "Pickup hour", "Ride count": "Number of rides"},
     )
-    st.plotly_chart(prediction_figure)
+    simplify_figure(prediction_figure)
+    st.plotly_chart(prediction_figure, use_container_width=True)
 
     importance = pd.DataFrame(
         {
@@ -313,18 +359,27 @@ def show_predictive_model(data, timestamp_column):
         x="Importance",
         y="Feature",
         orientation="h",
-        title="Random Forest feature importance",
+        color_discrete_sequence=["#2563EB"],
+        title="Feature importance",
         labels={"Importance": "Relative importance", "Feature": "Input feature"},
     )
-    st.plotly_chart(importance_figure)
+    simplify_figure(importance_figure)
+    st.plotly_chart(importance_figure, use_container_width=True)
     st.caption(
         "Feature importance shows which inputs the fitted forest used most. "
         "It does not show that a feature causes demand to change."
     )
 
 
-def show_overview(data, timestamp_column, latitude_column, longitude_column):
-    """Show filtered ride totals and the main pickup-time visualizations."""
+def show_overview(data, timestamp_column):
+    """Display date filters, summary cards, and pickup charts.
+
+    INPUT:
+        data: The cleaned ride DataFrame.
+        timestamp_column: The column containing parsed pickup timestamps.
+    OUTPUT: The DataFrame filtered to the selected date range. The same
+        filtered records are passed to the predictive-model tab.
+    """
     minimum_date = data[timestamp_column].min().date()
     maximum_date = data[timestamp_column].max().date()
     date_range = st.date_input(
@@ -361,6 +416,7 @@ def show_overview(data, timestamp_column, latitude_column, longitude_column):
         st.warning("There are no pickup records in the selected date range.")
         return filtered_data
 
+    # Count all rides per calendar day for the daily trend chart.
     daily_counts = (
         filtered_data.set_index(timestamp_column)
         .resample("D")
@@ -375,24 +431,42 @@ def show_overview(data, timestamp_column, latitude_column, longitude_column):
         markers=True,
         title="Daily pickups",
         labels={timestamp_column: "Pickup date", "Pickups": "Number of rides"},
+        color_discrete_sequence=["#2563EB"],
     )
-    st.plotly_chart(daily_figure)
+    simplify_figure(daily_figure)
+    st.plotly_chart(daily_figure, use_container_width=True)
 
-    hour_counts = (
-        filtered_data[timestamp_column].dt.hour.value_counts().reindex(range(24), fill_value=0)
+    # Count each hour once; reindex adds zero-count hours missing from the data.
+    hour_counts = filtered_data[timestamp_column].dt.hour.value_counts().reindex(
+        range(24), fill_value=0
     )
-    hour_data = pd.DataFrame(
-        {"Hour of day": range(24), "Pickups": hour_counts.to_numpy()}
+    # The hourly chart shows 6 AM through 5 PM; other charts keep all rides.
+    daytime_hours = list(range(6, 18))
+    daytime_data = pd.DataFrame(
+        {
+            "Hour": [
+                f"{hour % 12 or 12} {'AM' if hour < 12 else 'PM'}"
+                for hour in daytime_hours
+            ],
+            "Pickups": [hour_counts.loc[hour] for hour in daytime_hours],
+        }
     )
-    hour_figure = px.bar(
-        hour_data,
-        x="Hour of day",
+    daytime_figure = px.bar(
+        daytime_data,
+        x="Hour",
         y="Pickups",
-        title="Pickups by hour",
-        labels={"Hour of day": "Hour (0–23)", "Pickups": "Number of rides"},
+        title="Daytime pickups (6 AM–5 PM)",
+        labels={"Pickups": "Number of rides"},
+        color_discrete_sequence=["#F59E0B"],
     )
-    st.plotly_chart(hour_figure)
+    simplify_figure(daytime_figure)
+    st.plotly_chart(daytime_figure, use_container_width=True)
+    st.caption(
+        "This chart shows 6:00 AM–5:59 PM only. Nighttime pickups remain included "
+        "in the other dashboard analysis."
+    )
 
+    # Reindex ensures weekday bars stay Monday-to-Sunday, even when a day is absent.
     weekday_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     weekday_counts = (
         filtered_data[timestamp_column]
@@ -411,51 +485,24 @@ def show_overview(data, timestamp_column, latitude_column, longitude_column):
         y="Pickups",
         title="Pickups by weekday",
         labels={"Pickups": "Number of rides"},
+        color_discrete_sequence=["#2563EB"],
     )
-    st.plotly_chart(weekday_figure)
-
-    if latitude_column and longitude_column:
-        map_data = filtered_data[[latitude_column, longitude_column]].copy()
-        map_data[latitude_column] = pd.to_numeric(
-            map_data[latitude_column], errors="coerce"
-        )
-        map_data[longitude_column] = pd.to_numeric(
-            map_data[longitude_column], errors="coerce"
-        )
-        map_data = map_data.dropna()
-        map_data = map_data[
-            map_data[latitude_column].between(-90, 90)
-            & map_data[longitude_column].between(-180, 180)
-        ]
-
-        if not map_data.empty:
-            # Limit only the displayed points so large uploads remain responsive.
-            if len(map_data) > 5000:
-                map_data = map_data.sample(n=5000, random_state=42)
-                st.caption("The map displays a reproducible sample of up to 5,000 valid points.")
-
-            map_figure = px.scatter_map(
-                map_data,
-                lat=latitude_column,
-                lon=longitude_column,
-                zoom=2,
-                height=500,
-                title="Valid pickup locations",
-                map_style="open-street-map",
-            )
-            st.plotly_chart(map_figure)
-        else:
-            st.info("Pickup coordinate columns exist, but no valid coordinate pairs were found.")
-    else:
-        st.info(
-            "No recognized pickup latitude/longitude pair was found, so the map is not shown."
-        )
+    simplify_figure(weekday_figure)
+    st.plotly_chart(weekday_figure, use_container_width=True)
 
     return filtered_data
 
 
 def show_data_quality(raw_data, cleaned_data, cleaning_summary, timestamp_column):
-    """Show source information, missing values, and the cleaning summary."""
+    """Display source records, column details, and cleaning results.
+
+    INPUT:
+        raw_data: The original DataFrame before cleaning.
+        cleaned_data: The cleaned DataFrame after duplicate and timestamp checks.
+        cleaning_summary: Row counts returned by clean_data().
+        timestamp_column: The detected pickup timestamp column name.
+    OUTPUT: No Python value; displays data previews and quality information.
+    """
     st.subheader("Uploaded data")
     st.write(
         f"**Rows:** {len(raw_data):,} · **Columns:** {len(raw_data.columns):,} "
@@ -497,7 +544,13 @@ def show_data_quality(raw_data, cleaned_data, cleaning_summary, timestamp_column
 
 
 def main():
-    """Load a CSV, clean it, and display the four dashboard tabs."""
+    """Run the Streamlit dashboard from file upload through analysis.
+
+    INPUT: None directly; reads a CSV uploaded in the sidebar or the bundled
+        default CSV file.
+    OUTPUT: No Python value; renders the Overview, Correlation Analysis,
+        Predictive Model, and Data Quality tabs in the browser.
+    """
     st.title("🚕 Uber Rides: Predictive Analytics Dashboard")
     st.write(
         "Explore ride patterns, review data quality, and evaluate an hourly demand "
@@ -510,7 +563,20 @@ def main():
         type=["csv"],
         help="Upload a ride dataset with a pickup date/time column.",
     )
+    st.sidebar.markdown(
+        "**Input features**\n"
+        "- CSV file with a header row\n"
+        "- Required: pickup date/time column "
+        "(`pickup_time`, `pickup_datetime`, or similar)\n"
+        "- Optional: numeric measurements such as fare or distance\n\n"
+        "**Output features**\n"
+        "- Cleaned CSV download\n"
+        "- Pickup charts and date filtering\n"
+        "- Correlation analysis and hourly demand prediction\n"
+        "- Data quality and cleaning summary"
+    )
 
+    # INPUT: Prefer the user's uploaded CSV; otherwise use the bundled sample.
     try:
         if uploaded_file is not None:
             raw_data = pd.read_csv(uploaded_file)
@@ -535,6 +601,7 @@ def main():
         st.error("The CSV has no data rows or columns. Upload a non-empty CSV file.")
         return
 
+    # Validate that the file has a recognizable pickup time before analysis.
     timestamp_column = find_timestamp_column(raw_data)
     if timestamp_column is None:
         st.error(
@@ -545,6 +612,7 @@ def main():
         st.write("Columns found:", list(raw_data.columns))
         return
 
+    # Prepare the shared cleaned dataset used throughout the dashboard.
     cleaned_data, cleaning_summary = clean_data(raw_data, timestamp_column)
     st.sidebar.caption(f"Dataset: {dataset_label}")
     st.sidebar.caption(
@@ -566,18 +634,13 @@ def main():
         mime="text/csv",
     )
 
-    latitude_column, longitude_column = find_coordinate_columns(cleaned_data)
+    # OUTPUT: Four tabs containing the dashboard's charts, model, and reports.
     overview_tab, correlation_tab, prediction_tab, quality_tab = st.tabs(
         ["Overview", "Correlation Analysis", "Predictive Model", "Data Quality"]
     )
 
     with overview_tab:
-        filtered_data = show_overview(
-            cleaned_data,
-            timestamp_column,
-            latitude_column,
-            longitude_column,
-        )
+        filtered_data = show_overview(cleaned_data, timestamp_column)
 
     with correlation_tab:
         st.header("Correlation Analysis")

@@ -1,8 +1,8 @@
 # Multi-Feature Predictive Analytics Dashboard for Uber Rides
 
 A beginner-friendly Streamlit project that cleans ride records, explores pickup
-patterns, calculates numerical correlations, and evaluates an hourly ride-demand
-model.
+patterns with simple, consistent charts, calculates numerical correlations, and
+evaluates an hourly ride-demand model.
 
 ## Project files
 
@@ -11,6 +11,7 @@ AIDS_MINI_PROJECT/
 |-- app.py
 |-- requirements.txt
 |-- README.md
+|-- PROJECT_REPORT.txt
 |-- uber_trips_dataset_50k.csv
 ```
 
@@ -21,12 +22,14 @@ or model scores are fabricated.
 
 ## What each file does
 
-- **`app.py`** — loads and cleans the data, detects timestamp and pickup
-  coordinate columns, builds four interactive tabs, and trains/evaluates the
-  Random Forest model.
+- **`app.py`** — loads and cleans the data, detects the pickup timestamp,
+  builds four interactive tabs, and trains/evaluates the Random Forest model.
 - **`requirements.txt`** — lists the Python packages used by the dashboard.
 - **`README.md`** — installation, usage, test cases, viva questions, and report
   and presentation guidance.
+- **`PROJECT_REPORT.txt`** — a structured college report with measured
+  dataset/model results, methodology, testing, limitations, and a presentation
+  script.
 - **`uber_trips_dataset_50k.csv`** — the provided 50,000-row ride dataset used
   as the default example.
 
@@ -92,10 +95,11 @@ automatically.
 Use the **Upload a CSV file** control in the left sidebar. The file must have a
 header row and a pickup timestamp column. Common names such as `pickup_time`,
 `pickup_datetime`, `Date/Time`, `datetime`, and `timestamp` are recognized.
-Pickup latitude/longitude columns are optional; common forms such as
-`pickup_lat`/`pickup_lng`, `pickup_latitude`/`pickup_longitude`, and `Lat`/`Lon`
-are supported. The dashboard reports an error and lists the columns it found
-when it cannot identify a pickup timestamp.
+The sidebar lists the required and optional input features and the dashboard
+outputs. Numeric columns such as fare or distance are optional and are used
+when available for correlation analysis.
+The dashboard reports an error and lists the columns it found when it cannot
+identify a pickup timestamp.
 
 After loading, use the **Download cleaned CSV** button in the sidebar to save
 the cleaned records. Exact duplicate rows and rows with missing or invalid
@@ -105,9 +109,13 @@ date range evaluated in the Predictive Model tab.
 
 ## Dashboard tabs
 
+All charts use a clean white background, concise titles, and a consistent color
+palette so the main patterns are easy to compare.
+
 1. **Overview** — pickup totals, active days, average rides per active day,
-   daily pickups, hour-of-day pickups, weekday pickups, and a map when valid
-   pickup coordinates are available.
+   daily pickups, daytime (6 AM–5:59 PM) hourly pickups, and weekday pickups.
+   Nighttime pickups are not shown in the hourly chart but remain included in
+   the other dashboard analysis.
 2. **Correlation Analysis** — interactive heatmap for varying numerical
    measurements. Fields named like IDs are excluded because their numeric
    ordering does not represent a measurement. Correlation does not prove
@@ -128,12 +136,11 @@ date range evaluated in the Predictive Model tab.
 | Check the input summary | Open **Data Quality** | The source preview, row/column counts, types, missing-value counts, duplicate count, invalid-time count, and cleaned-row count are shown. |
 | Download cleaned records | Click **Download cleaned CSV** in the sidebar | A CSV named `cleaned_uber_rides.csv` downloads with duplicates and invalid pickup times removed. |
 | Use the date filter | Select a smaller date interval in **Overview** | Overview charts and KPIs update; the predictive evaluation uses rides from that selected interval. |
-| Check pickup charts | Open **Overview** | Daily, hourly (0–23), and Monday-to-Sunday pickup charts render with labels. |
-| Check the supplied coordinates | Open **Overview** with the supplied CSV | A map is shown only if valid pickup coordinate pairs exist. Invalid coordinate values are excluded. |
-| Upload Kaggle-style headers | Upload a CSV with `Date/Time`, `Lat`, `Lon`, and numeric fields | The pickup timestamp is detected; the map appears when coordinate values are valid. |
+| Check pickup charts | Open **Overview** | Daily, daytime (6 AM–5:59 PM), and Monday-to-Sunday charts render; the hourly chart does not display nighttime pickups. |
+| Upload Kaggle-style headers | Upload a CSV with `Date/Time` and numeric fields | The pickup timestamp is detected and time-based charts render. |
 | Test duplicate removal | Upload a file containing an identical row twice | The exact duplicate count increases and the repeated record is removed. |
 | Test invalid/missing times | Include a blank or unparseable value in the pickup-time column | Those rows are counted as invalid and excluded from cleaned analysis. |
-| Test optional columns | Upload a timestamp-only CSV with no fare, distance, passenger, or coordinate fields | Time-based analysis still works; the map is omitted and no absent fields are invented. |
+| Test optional columns | Upload a timestamp-only CSV with no fare, distance, or passenger fields | Time-based analysis still works and no absent fields are invented. |
 | Test identifier handling | Include numeric columns named `trip_id` or `driver_id` | These identifier columns do not appear in the correlation heatmap. |
 | Test short date coverage | Select a range spanning fewer than 10 hourly buckets | The prediction tab explains that more hourly buckets are needed instead of showing invented metrics. |
 | Test no usable rows | Upload a header-only file, an empty file, or records with invalid timestamps | The app reports an understandable error and does not attempt to fit the model. |
@@ -232,8 +239,7 @@ date range evaluated in the Predictive Model tab.
 > for Uber Rides. It uses a CSV of ride records. The dashboard first checks the
 > data, removes exact duplicate records, converts the pickup-time column to a
 > datetime, and excludes records with invalid pickup times from time-based
-> analysis. The Overview tab displays daily, hourly, and weekday patterns and
-> shows a pickup map when valid coordinates are present. The Correlation tab
+> analysis. The Overview tab displays daily, hourly, and weekday patterns. The Correlation tab
 > compares suitable numeric measurements and excludes identifier columns.
 > The Predictive Model tab groups rides into hours, creates calendar features,
 > trains a Random Forest on earlier hours, and evaluates it on later hours

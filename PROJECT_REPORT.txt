@@ -1,0 +1,526 @@
+======================================================================
+PROJECT REPORT
+MULTI-FEATURE PREDICTIVE ANALYTICS DASHBOARD FOR UBER RIDES
+======================================================================
+
+Prepared as a college mini-project
+
+Student name : ______________________________________________
+Roll number  : ______________________________________________
+Department   : ______________________________________________
+College      : ______________________________________________
+Project guide: ______________________________________________
+Academic year: ______________________________________________
+Submission date: ____________________________________________
+
+NOTE ABOUT RESULTS
+The dataset and model values in this report were measured from the CSV
+included with this project. They are not promised results for another
+dataset. If the CSV or app changes, rerun the analysis and update the
+results before submitting this report.
+
+
+CONTENTS
+--------
+1. Abstract
+2. Introduction
+3. Problem statement
+4. Aim and objectives
+5. Scope
+6. Tools and technologies
+7. Dataset description
+8. Methodology
+9. System design
+10. Dashboard modules
+11. Results from the supplied dataset
+12. Testing
+13. Limitations
+14. Future enhancements
+15. Conclusion
+16. References
+17. Appendix A: Project structure
+18. Appendix B: Run instructions
+19. Appendix C: Short presentation script
+
+
+1. ABSTRACT
+-----------
+This project presents an interactive dashboard for inspecting ride pickup
+records and demonstrating a basic hourly-demand prediction workflow. The
+application is written in Python and uses Pandas and NumPy for data
+processing, Plotly for interactive visualizations, Scikit-learn for a
+Random Forest regression model, and Streamlit for the user interface.
+
+The dashboard loads the supplied CSV by default or accepts another CSV
+through a sidebar uploader. It reports data quality, removes exact
+duplicate records, converts a detected pickup timestamp to datetime, and
+excludes records with missing or invalid pickup timestamps from
+time-based analysis. It displays daily, daytime hourly, and weekday pickup
+summaries; a correlation heatmap for eligible numerical measurements; and
+an hourly-demand model evaluated on a chronological holdout period.
+
+On the supplied file, the Random Forest did not outperform the
+training-mean baseline. The measured negative R-squared indicates that
+the predictions did not explain variation in the held-out hourly counts
+better than the mean reference. The project is therefore an educational
+analytics demonstration, not a claim of accurate operational forecasting.
+
+
+2. INTRODUCTION
+---------------
+Ride records contain timestamps and may also contain locations, trip
+distances, fares, statuses, and identifiers. Summarizing such records by
+date, hour, or weekday can help a user explore when pickups were recorded.
+However, raw CSV data can contain duplicate rows, invalid dates, missing
+values, or column names that differ between datasets.
+
+This project places the data preparation, visual analysis, correlation
+analysis, and a simple predictive experiment in one Streamlit dashboard.
+The user can inspect the input, see the cleaning effects, filter the
+pickup-date interval, and compare model predictions with actual counts.
+
+
+3. PROBLEM STATEMENT
+--------------------
+It is inconvenient to inspect a large ride CSV manually and difficult to
+compare ride volume across time without grouping and visualization. A
+beginner-friendly application is needed to load ride data, identify a
+pickup-time field, report data quality, show useful time summaries, and
+demonstrate a reproducible prediction evaluation without inventing fields
+or claiming unsupported model accuracy.
+
+
+4. AIM AND OBJECTIVES
+---------------------
+Aim:
+Build an interactive analytics dashboard for ride pickup records and
+evaluate a simple model for hourly record-count prediction.
+
+Objectives:
+1. Load the provided CSV or a user-uploaded CSV file.
+2. Display the input dimensions, sample rows, column types, missing
+   values, and duplicate count.
+3. Identify a supported pickup timestamp column without requiring the
+   user to rename the supplied columns.
+4. Remove exact duplicate rows and records with unusable pickup
+   timestamps, and report the before-and-after row counts.
+5. Visualize daily, hourly, and weekday pickup-record counts.
+6. Calculate numerical correlations while excluding identifier-like
+   fields from the continuous-measurement analysis.
+7. Aggregate records into hourly counts and create calendar/time-index
+   features.
+8. Evaluate a Random Forest with an earlier-to-later chronological split
+   and compare it with a training-mean baseline.
+9. Provide a download of the cleaned CSV.
+
+
+5. SCOPE
+--------
+Included:
+- CSV input from the project sample or sidebar upload.
+- Exact duplicate removal.
+- Pickup timestamp parsing and invalid timestamp removal.
+- Missing-value reporting; other fields are not filled with guessed
+  values.
+- Date-filtered daily, hourly, and weekday pickup charts.
+- Correlation heatmap for varying numerical measurements.
+- Hourly aggregation, model evaluation, and feature importance.
+- Cleaned CSV download.
+
+Not included:
+- Live ride feeds, fare recommendations, or driver allocation.
+- A production forecasting service or a promise of future accuracy.
+- Automatic imputation of non-timestamp missing values.
+
+
+6. TOOLS AND TECHNOLOGIES
+-------------------------
+Python        : application programming language.
+Pandas        : CSV input, data cleaning, datetime conversion, grouping,
+                and summary tables.
+NumPy         : numerical operations and baseline array creation.
+Plotly        : interactive line, bar, and heatmap visualizations.
+Scikit-learn  : RandomForestRegressor and regression evaluation metrics.
+Streamlit     : dashboard interface, tabs, uploader, widgets, and
+                download button.
+Visual Studio Code: editor and integrated terminal used for development.
+
+
+7. DATASET DESCRIPTION
+----------------------
+Dataset file: uber_trips_dataset_50k.csv
+Observed shape: 50,000 rows and 14 columns
+Observed pickup-time field: pickup_time
+Observed first pickup: 2023-01-01 00:00:00
+Observed last pickup : 2023-02-04 17:19:00
+Observed date span   : 35 calendar days
+
+Columns found in the supplied CSV:
+trip_id, driver_id, rider_id, city, pickup_lat, pickup_lng, drop_lat,
+drop_lng, distance_km, fare_amount, status, payment_method, pickup_time,
+drop_time.
+
+The file contains trip, driver, and rider identifiers; city and payment
+categories; pickup and drop coordinates; trip distance and fare; trip
+status; and pickup and drop timestamps. Identifiers are labels and are
+not treated as meaningful continuous measurements for the correlation
+heatmap.
+
+Data provenance:
+The source or collection method for this CSV is not documented in the
+project files. The report therefore describes the file that was
+inspected, but does not assert that it is an official Uber dataset.
+Provide and cite the original dataset source here if known:
+____________________________________________________________________
+____________________________________________________________________
+
+Data quality observed in the supplied CSV:
+- Missing cells before cleaning: 0
+- Exact duplicate rows before cleaning: 0
+- Invalid or missing pickup timestamps: 0
+- Rows after the dashboard's cleaning steps: 50,000
+- Other field values are not automatically imputed.
+
+The dashboard's time-based count includes every retained record,
+regardless of its status value. In the supplied file the status counts
+are:
+Completed : 42,540
+Cancelled : 4,984
+No-Show   : 2,476
+
+Therefore the reported demand is pickup-record volume, not completed-trip
+volume. A study specifically about completed rides should filter the
+status column using a documented rule before analysis.
+
+
+8. METHODOLOGY
+--------------
+8.1 CSV loading
+The application first reads a user-uploaded CSV if one is selected.
+Otherwise, it loads the supplied project CSV. Empty or unreadable files
+and files without a recognizable pickup timestamp produce an explanatory
+message instead of model results.
+
+8.2 Column detection
+The application recognizes common timestamp headers, including
+pickup_time, pickup_datetime, pickup_date, Date/Time, datetime, and
+timestamp, with additional pickup/date/time name matching. This supports
+common dataset variations but cannot guarantee recognition of every
+possible custom header.
+
+8.3 Cleaning
+The application:
+1. Counts exact duplicate rows.
+2. Removes those exact duplicate rows.
+3. Converts the detected pickup timestamp to a datetime value, coercing
+   unparseable values to missing datetimes.
+4. Counts and removes rows whose pickup timestamp is missing or invalid.
+5. Reports, but does not guess replacements for, missing values in
+   other columns.
+
+8.4 Exploratory analysis
+For the selected date interval, the application counts pickup records
+per calendar day, hour of day (0 to 23), and weekday (Monday to Sunday).
+
+8.5 Correlation analysis
+The heatmap uses numeric columns that vary and are not named like IDs.
+For the supplied CSV, the selected fields are pickup_lat, pickup_lng,
+drop_lat, drop_lng, distance_km, and fare_amount. Correlation describes
+association and does not prove that one variable causes another.
+
+8.6 Hourly demand and predictive model
+Each retained row is counted in its pickup hour. Empty hours between the
+first and last pickup are included as zero-count hours. Model inputs are:
+- hour of day
+- day of week
+- month
+- weekend indicator
+- sequential time index
+
+The first 80 percent of hourly buckets, in time order, are used for
+training. The final 20 percent are held out for testing. A
+RandomForestRegressor with 150 trees, minimum leaf size 2, and random
+seed 42 is fitted to the training period. Its predictions are compared
+with a baseline that predicts the mean training-period count for each
+test hour.
+
+Metrics:
+- MAE (Mean Absolute Error): mean absolute prediction error in rides
+  per hour; lower is better.
+- RMSE (Root Mean Squared Error): error in rides per hour that penalizes
+  larger misses more; lower is better.
+- R-squared: comparison with a mean-only reference on the test data.
+  A negative value means the evaluated predictions are worse than the
+  test-set mean reference under this metric. R-squared is omitted when
+  the test target cannot support a meaningful calculation.
+
+
+9. SYSTEM DESIGN
+----------------
+Data source
+    |
+    +-- Project sample CSV
+    |
+    +-- User-uploaded CSV
+            |
+            v
+    Detect pickup timestamp
+            |
+            v
+    Remove exact duplicates and invalid pickup timestamps
+            |
+            +--> Data quality and cleaned CSV download
+            |
+            +--> Date-filtered daily, hourly, and weekday charts
+            |
+            +--> Correlation heatmap
+            |
+            +--> Hourly aggregation -> chronological split
+                                      -> Random Forest
+                                      -> baseline comparison
+                                      -> metrics and charts
+
+The Streamlit interface presents these results in four tabs:
+Overview, Correlation Analysis, Predictive Model, and Data Quality.
+
+
+10. DASHBOARD MODULES
+---------------------
+10.1 Overview
+Shows pickup-record, active-day, and average-record-per-active-day KPI
+cards; a pickup date filter; and daily, daytime hourly, and weekday charts.
+The hourly chart displays 6:00 AM–5:59 PM only; nighttime pickups remain
+included in the other dashboard analysis. Charts
+use concise titles, a consistent color palette, and minimal gridlines for
+clarity.
+
+10.2 Correlation Analysis
+Displays an interactive numerical correlation heatmap and a reminder
+that correlation does not establish cause and effect. The heatmap uses a
+simple diverging color scale and displays the correlation values.
+
+10.3 Predictive Model
+Displays the number of hourly buckets used for training and testing,
+Random Forest and baseline metrics, actual-versus-predicted values, and
+feature importance in simplified charts. Results correspond to the
+currently selected date interval.
+
+10.4 Data Quality
+Displays the source preview, row and column information, data types,
+missing values before and after cleaning, duplicate and invalid-time
+counts, cleaned row count, and a cleaned-data preview.
+
+
+11. RESULTS FROM THE SUPPLIED DATASET
+-------------------------------------
+All values below were calculated from the included CSV using the
+dashboard's cleaning and model approach.
+
+11.1 Cleaning summary
+Rows before cleaning                  : 50,000
+Exact duplicates removed              : 0
+Rows with invalid pickup timestamps   : 0
+Rows after cleaning                   : 50,000
+Missing cells in original CSV         : 0
+
+11.2 Time coverage and counts
+First pickup timestamp                : 2023-01-01 00:00:00
+Last pickup timestamp                 : 2023-02-04 17:19:00
+Calendar days                         : 35
+Hourly buckets                        : 834
+Training hourly buckets (first 80%)   : 667
+Testing hourly buckets (last 20%)     : 167
+Average daily pickup records          : 1,428.57
+Minimum records in an hourly bucket   : 20
+Maximum records in an hourly bucket   : 60
+Average records per hourly bucket     : 59.95
+
+The counts describe records, including rows with Cancelled and No-Show
+statuses. They should not be read as completed journeys.
+
+11.3 Example numerical correlation
+Distance and fare correlation         : 0.871
+
+This value indicates a strong positive linear association in this
+particular CSV. It does not show that distance alone causes fare changes;
+pricing rules and other factors may also matter.
+
+11.4 Prediction evaluation
+Metric                         Random Forest     Mean baseline
+-----------------------------  ---------------   -------------
+MAE (rides per hour)           0.2395            0.2395
+RMSE (rides per hour)          3.0953            3.0953
+R-squared                      -0.0060           -0.0060
+
+Interpretation:
+For the observed chronological test period, the Random Forest produced
+the same reported errors as the training-mean baseline, and its
+R-squared was slightly below zero. This result does not support a claim
+that the Random Forest improves hourly predictions for this sample. The
+hourly buckets are mostly 60 records, with a partial final hour, so the
+data has little variation for this particular forecasting setup.
+
+These are evaluation results for this included file and this fixed split.
+They are not a guarantee of performance on another date range or CSV.
+
+
+12. TESTING
+-----------
+The following checks were performed during development:
+
+1. Python syntax compilation completed successfully.
+2. The supplied CSV loaded with 50,000 rows and 14 columns.
+3. The application detected pickup_time as the timestamp column.
+4. Cleaning retained 50,000 valid records for the supplied file.
+5. trip_id and driver_id were excluded from correlation measurements.
+6. The correlation matrix was generated for eligible measurements.
+7. Hourly aggregation and a chronological Random Forest evaluation ran.
+8. MAE, RMSE, and R-squared were calculated on held-out hours.
+9. Plotly heatmap figure creation completed.
+10. A small input with an exact duplicate and invalid timestamps removed
+    one duplicate and two invalid timestamp rows as expected.
+11. Streamlit AppTest rendered all four tabs without application
+    exceptions.
+
+Additional manual checks for a demonstration:
+- Upload a CSV with a Date/Time field and optional Lat/Lon fields.
+- Upload a timestamp-only CSV with no fare or distance fields.
+- Upload a file containing a blank or invalid pickup timestamp.
+- Upload a file with no supported timestamp header.
+- Select a date range with fewer than 10 hours and confirm the model
+  shows a helpful message.
+- Download and inspect cleaned_uber_rides.csv.
+
+
+13. LIMITATIONS
+---------------
+1. The source/provenance of the supplied CSV is not stated in the project
+   files. Cite the original data source if it is known.
+2. The model uses only calendar fields and a sequential time index; it
+   does not use weather, holidays, special events, traffic, or service
+   disruptions.
+3. The hourly series in the supplied data is almost constant, so the
+   example provides a weak forecasting challenge and the model does not
+   beat the mean baseline.
+4. The model counts all retained rows regardless of status. Counts are
+   pickup-record counts, not necessarily completed rides.
+5. A chronological split tests one historical period and does not
+   guarantee future performance.
+6. Feature importance is not a causal explanation.
+7. The app removes exact duplicates only. It does not determine whether
+   two non-identical rows describe the same real-world ride.
+8. Missing non-timestamp fields are reported, not imputed.
+9. Column-name detection supports common aliases but not every possible
+   custom naming convention.
+10. The date-range filter affects overview and model results. The
+    correlation and data-quality tabs describe the full cleaned upload.
+
+
+14. FUTURE ENHANCEMENTS
+-----------------------
+1. Document and cite the exact source and license for the dataset.
+2. Allow the user to select whether cancelled and no-show records count
+   as demand.
+3. Add a rolling-origin validation approach for comparing multiple
+   historical test windows.
+4. Compare with additional simple time-series baselines before selecting
+   a final model.
+5. Add lagged pickup counts and holiday/weather information when reliable
+   data is available.
+6. Add validation for unusual distances and fares.
+7. Add automated unit tests for column detection, cleaning, and hourly
+   aggregation.
+
+
+15. CONCLUSION
+--------------
+The project delivers a working Streamlit dashboard for CSV loading,
+quality reporting, pickup-time exploration, numerical correlation, and
+hourly demand-model evaluation. It handles the supplied dataset without
+requiring column renaming and offers support for common timestamp headers. The evaluation is transparent:
+on the included data, the Random Forest did not outperform the simple
+training-mean baseline. This is a useful outcome because it demonstrates
+why models should be compared with baselines and why measured results
+should be reported honestly.
+
+
+16. REFERENCES
+--------------
+Project source code:
+- app.py in this project repository.
+- README.md in this project repository.
+
+Official library documentation:
+- Python: https://docs.python.org/3/
+- Pandas: https://pandas.pydata.org/docs/
+- NumPy: https://numpy.org/doc/
+- Plotly: https://plotly.com/python/
+- Scikit-learn: https://scikit-learn.org/stable/
+- Streamlit: https://docs.streamlit.io/
+
+Dataset source:
+- Add the actual dataset download page, author, access date, and license
+  here if known. Do not cite an assumed source.
+
+
+17. APPENDIX A: PROJECT STRUCTURE
+---------------------------------
+AIDS_MINI_PROJECT/
+|-- app.py
+|-- requirements.txt
+|-- README.md
+|-- PROJECT_REPORT.txt
+|-- uber_trips_sample_dataset.csv (requested name in the original brief)
+|-- uber_trips_dataset_50k.csv   (actual supplied dataset used by app.py)
+|-- .gitignore
+
+Important:
+The actual supplied dataset is named uber_trips_dataset_50k.csv. The
+application loads this exact filename. The requested
+uber_trips_sample_dataset.csv file was not created because no separate
+sample CSV with that name was supplied.
+
+
+18. APPENDIX B: RUN INSTRUCTIONS
+--------------------------------
+In the Windows VS Code terminal, from the project folder:
+
+    py -m venv .venv
+    .\.venv\Scripts\Activate.ps1
+    python -m pip install --upgrade pip
+    pip install -r requirements.txt
+    streamlit run app.py
+
+Open the local URL printed by Streamlit, normally:
+
+    http://localhost:8501
+
+To use a different dataset, select "Upload a CSV file" in the dashboard
+sidebar. A supported pickup timestamp column is required.
+
+
+19. APPENDIX C: SHORT PRESENTATION SCRIPT
+-----------------------------------------
+Good morning. My project is the Multi-Feature Predictive Analytics
+Dashboard for Uber Rides. It uses Python, Pandas, NumPy, Plotly,
+Scikit-learn, and Streamlit.
+
+The dashboard loads a supplied or uploaded ride CSV, detects a pickup
+timestamp column, removes exact duplicates and invalid pickup times, and
+reports data quality. The Overview tab displays daily, hourly, and
+weekday pickup-record patterns. The Correlation Analysis tab compares
+suitable numeric measurements while excluding identifier columns.
+
+The Predictive Model tab aggregates records into hourly counts, creates
+calendar and time-index features, trains a Random Forest on earlier hours,
+and evaluates it on later hours. It compares MAE, RMSE, and R-squared
+with a simple training-mean baseline. For the supplied dataset, the
+Random Forest did not beat the baseline, so I do not claim that it is an
+accurate forecasting model. The Data Quality tab explains the cleaning
+steps and provides a cleaned CSV download.
+
+Thank you.
+
+======================================================================
+END OF REPORT
+======================================================================
